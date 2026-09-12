@@ -52,6 +52,7 @@ def create_app(settings: Settings | None = None, **build_graph_overrides: Any) -
                 checkpointer,
                 ocr_provider,
                 intake_llm=build_graph_overrides.get("intake_llm"),
+                repair_llm=build_graph_overrides.get("repair_llm"),
                 cache=cache,
             )
 

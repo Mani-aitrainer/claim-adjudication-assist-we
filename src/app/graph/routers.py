@@ -1,14 +1,31 @@
 """Conditional edge functions.
 
-Only one branch exists today: if OCR/intake failed, skip validation (there is nothing to
-validate) and end the run. When FieldRepairAgent and HeuristicFallbackAgent are added,
-route_after_validate (repair / fallback / done) belongs back here.
+`retry_count` in state (not the LangGraph recursion limit) is what stops the repair loop —
+see FieldRepairAgent's docstring and DEVELOPMENT_PLAN.md's guardrail note.
 """
 
+from app.core.agent_config import get_agent_config
 from app.graph.state import ClaimState
+from app.validation.rules import is_repairable
 
 
 def route_after_intake(state: ClaimState) -> str:
     if state.get("errors"):
-        return "end"
+        return "fallback"
     return "validate"
+
+
+def route_after_validate(state: ClaimState) -> str:
+    validation = state.get("validation", {})
+    if validation.get("is_valid"):
+        return "done"
+
+    errors = validation.get("errors", [])
+    if not is_repairable(errors):
+        return "done"  # unrepairable (e.g. POLICY_WINDOW) -> straight through for a proper denial
+
+    model_extra = get_agent_config("repair_agent").model_extra or {}
+    max_attempts = model_extra.get("retry", {}).get("max_attempts", 2)
+    if state.get("retry_count", 0) < max_attempts:
+        return "repair"
+    return "fallback"

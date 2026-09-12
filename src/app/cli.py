@@ -55,6 +55,13 @@ class CLA:
             return OfflineCopyIntakeLLM()
         return get_llm("intake_agent")
 
+    def _repair_llm(self) -> Any:
+        if self.offline:
+            from app.agents.offline_llm import OfflineRepairLLM
+
+            return OfflineRepairLLM()
+        return get_llm("repair_agent")
+
     async def _get_graph(self) -> Any:
         if self._graph is None:
             checkpointer = MemorySaver()
@@ -62,6 +69,7 @@ class CLA:
                 checkpointer,
                 self._ocr_provider,
                 intake_llm=self._intake_llm(),
+                repair_llm=self._repair_llm(),
                 cache=self._cache,
             )
         return self._graph
