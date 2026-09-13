@@ -1,6 +1,6 @@
 """Liveness and readiness endpoints.
 
-/healthz has no dependencies. /readyz checks the cache and secret provider.
+/healthz has no dependencies. /readyz checks the vector store, cache and secret provider.
 """
 
 from typing import Any
@@ -18,6 +18,12 @@ async def healthz() -> dict[str, str]:
 @router.get("/readyz")
 async def readyz(request: Request, response: Response) -> dict[str, Any]:
     checks: dict[str, str] = {}
+
+    try:
+        request.app.state.vector_store.count("claims")
+        checks["vector_store"] = "ok"
+    except Exception as exc:  # noqa: BLE001 - reported in the readiness payload
+        checks["vector_store"] = f"error: {exc}"
 
     try:
         cache = request.app.state.cache

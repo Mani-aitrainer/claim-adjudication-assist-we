@@ -1,48 +1,42 @@
-"""Prometheus metric definitions. One module, imported everywhere a metric is recorded —
-no agent or node ever creates its own Counter/Histogram.
+"""Every Prometheus metric the system emits, defined once. All instrumentation reads from
+this module — no metric is ever created ad hoc inside a node body.
 """
 
 from prometheus_client import Counter, Histogram
 
-# BaseAgent (src/app/agents/base.py)
 agent_invocations_total = Counter(
     "agent_invocations_total", "Agent run() calls", ["agent", "status"]
 )
 agent_latency_seconds = Histogram(
-    "agent_latency_seconds", "Agent run() wall-clock latency", ["agent"]
-)
-
-# llm_factory.InstrumentedChatModel
-llm_calls_total = Counter(
-    "llm_calls_total", "Chat model invoke() calls", ["agent", "model", "outcome"]
+    "agent_latency_seconds", "Agent run() latency", ["agent"]
 )
 agent_tokens_total = Counter(
-    "agent_tokens_total", "Tokens consumed per agent/model", ["agent", "model", "token_type"]
+    "agent_tokens_total", "Tokens consumed per agent", ["agent", "model", "token_type"]
 )
 agent_cost_usd_total = Counter(
-    "agent_cost_usd_total", "Estimated USD cost per agent/model", ["agent", "model"]
+    "agent_cost_usd_total", "Estimated USD cost per agent", ["agent", "model"]
 )
-
-# cache/base.py
-cache_operations_total = Counter(
-    "cache_operations_total", "Cache get/get_or_set outcomes", ["namespace", "result"]
+llm_calls_total = Counter(
+    "llm_calls_total", "LLM calls, including retries and failures", ["agent", "model", "outcome"]
 )
-
-# ocr/fixture_provider.py, ocr/textract_provider.py
-textract_pages_total = Counter(
-    "textract_pages_total", "Pages processed by the OCR provider", ["outcome"]
-)
-
-# graph/build_graph.py
 graph_runs_total = Counter("graph_runs_total", "Completed graph runs", ["outcome"])
 graph_run_duration_seconds = Histogram(
-    "graph_run_duration_seconds", "Wall-clock duration of a full graph run", ["domain"]
+    "graph_run_duration_seconds", "End-to-end graph run duration", ["domain"]
 )
-
-# graph/nodes/validate_node.py
 validation_failures_total = Counter(
-    "validation_failures_total", "Validation rule failures", ["rule"]
+    "validation_failures_total", "ClaimValidatorAgent rule failures", ["rule"]
 )
 repair_attempts_total = Counter(
-    "repair_attempts_total", "Field repair attempts and their outcome", ["outcome"]
+    "repair_attempts_total", "FieldRepairAgent attempts", ["outcome"]
 )
+healing_loops_total = Counter(
+    "healing_loops_total", "DecisionAuditorAgent heal loops", ["outcome"]
+)
+quality_score = Histogram("quality_score", "DecisionAuditorAgent quality score", ["domain"])
+cache_operations_total = Counter(
+    "cache_operations_total", "Cache operations", ["namespace", "result"]
+)
+context_tokens_used = Histogram(
+    "context_tokens_used", "Tokens per context/history/memory bucket", ["agent", "bucket"]
+)
+textract_pages_total = Counter("textract_pages_total", "Textract pages processed", ["outcome"])

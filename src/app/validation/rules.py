@@ -127,10 +127,35 @@ def get_policy_period(policy_no: str) -> dict[str, str] | None:
     return _load_rules_config()["policy_periods"].get(policy_no)
 
 
-def is_repairable(errors: list[ValidationIssue]) -> bool:
-    """False if any failing rule is in the unrepairable set (e.g. POLICY_WINDOW) — those
-    reflect genuinely wrong data, not an OCR problem, and must not be sent to FieldRepairAgent."""
-    config = _load_rules_config()
-    unrepairable = set(config["unrepairable_rule_codes"])
-    codes = {error["code"] for error in errors}
-    return not (codes & unrepairable)
+
+def route_after_validate(state: ClaimState) -> str:
+    validation = state.get("validation", {})
+    if validation.get("is_valid"):
+        return "done"
+
+    errors = validation.get("errors", [])
+    if not is_repairable(errors):
+        return "done"  # unrepairable (e.g. POLICY_WINDOW) -> straight through for a proper denial
+
+    model_extra = get_agent_config("repair_agent").model_extra or {}
+    max_attempts = model_extra.get("retry", {}).get("max_attempts", 2)
+    if state.get("retry_count", 0) < max_attempts:
+        return "repair"
+    return "fallback"
+
+
+def route_after_validate(state: ClaimState) -> str:
+    validation = state.get("validation", {})
+    if validation.get("is_valid"):
+        return "done"
+
+    errors = validation.get("errors", [])
+    if not is_repairable(errors):
+        return "done"  # unrepairable (e.g. POLICY_WINDOW) -> straight through for a proper denial
+
+    model_extra = get_agent_config("repair_agent").model_extra or {}
+    max_attempts = model_extra.get("retry", {}).get("max_attempts", 2)
+    if state.get("retry_count", 0) < max_attempts:
+        return "repair"
+    return "fallback"
+

@@ -1,14 +1,13 @@
 """ClaimState — the shared state every node in the LangGraph StateGraph reads from and
-writes to.
-
-Only the fields ClaimIntakeAgent, ClaimValidatorAgent, FieldRepairAgent and
-HeuristicFallbackAgent actually produce are declared here. When PolicyAdjudicatorAgent
-and DecisionAuditorAgent are built, extend this TypedDict (and build_graph.py /
-routers.py) rather than pre-declaring their fields now.
+writes to. Append-only lists use the operator.add reducer so looping nodes never clobber
+each other; everything else is last-write-wins.
 """
 
 import operator
 from typing import Annotated, Literal, TypedDict
+
+from langchain_core.messages import AnyMessage
+from langgraph.graph.message import add_messages
 
 
 class ValidationIssue(TypedDict):
@@ -38,7 +37,7 @@ class ClaimState(TypedDict, total=False):
     # ClaimIntakeAgent
     ocr_result: dict
     extracted_fields: dict
-    extraction_source: str  # intake_llm | fewshot_repair | heuristic_fallback | ocr_failed
+    extraction_source: str  # intake_llm | fewshot_repair | heuristic_fallback
 
     # ClaimValidatorAgent / FieldRepairAgent / HeuristicFallbackAgent
     validation: dict
@@ -46,6 +45,24 @@ class ClaimState(TypedDict, total=False):
     fallback_used: bool
     needs_human_review: bool
     confidence: str  # high | medium | low
+
+    # PolicyAdjudicatorAgent
+    retrieved_context: dict
+    reasoning_trace: str
+    decision: dict
+
+    # DecisionAuditorAgent
+    heal_attempts: int
+    quality_score: float
+    critique: str | None
+    degraded: bool
+
+    # context / history / memory tradeoff
+    messages: Annotated[list[AnyMessage], add_messages]
+    history_summary: str
+    long_term_facts: list[dict]
+    reasoning_traces: Annotated[list[str], operator.add]  # one per adjudicate attempt, this run
+    token_budget_report: dict
 
     # cross-cutting
     metrics: Annotated[list[AgentMetric], operator.add]

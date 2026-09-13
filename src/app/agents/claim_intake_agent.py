@@ -18,7 +18,6 @@ from typing import Any
 import yaml
 
 from app.agents.base import BaseAgent
-from app.agents.offline_llm import parse_amount, parse_units
 from app.agents.prompts.intake_extraction import build_intake_messages
 from app.cache.base import CacheProvider
 from app.core.llm_factory import get_llm
@@ -81,19 +80,4 @@ class ClaimIntakeAgent(BaseAgent):
         llm = self._llm if self._llm is not None else get_llm("intake_agent")
         messages = build_intake_messages(parsed["key_values"], parsed["tables"], _load_field_map())
         response = llm.invoke(messages)
-        fields: dict[str, Any] = json.loads(str(response.content))
-        return self._coerce_numeric_types(fields)
-
-    @staticmethod
-    def _coerce_numeric_types(fields: dict[str, Any]) -> dict[str, Any]:
-        """The model is asked to return claimed_amount/line item amount/units as numbers,
-        but chat models don't reliably honor JSON schema types — normalize here so
-        downstream validation rules can assume numeric types regardless of provider."""
-        if "claimed_amount" in fields:
-            fields["claimed_amount"] = parse_amount(fields["claimed_amount"])
-        for item in fields.get("line_items") or []:
-            if "amount" in item:
-                item["amount"] = parse_amount(item["amount"])
-            if "units" in item:
-                item["units"] = parse_units(item["units"])
-        return fields
+        return json.loads(str(response.content))

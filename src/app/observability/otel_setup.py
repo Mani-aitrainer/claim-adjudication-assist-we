@@ -1,25 +1,25 @@
-"""OpenTelemetry tracing setup. configure_tracing() wires a Prometheus metric reader once
-per process; get_tracer() is what BaseAgent uses to open a span per agent run.
-
-Both are no-op safe: if configure_tracing() is never called, get_tracer() still returns a
-usable (non-exporting) tracer from the default global provider.
+"""OpenTelemetry tracing: one span per graph run, child span per agent, attributes
+run_id/agent/model/tokens/cache_hit. Console exporter locally; OTLP to an ADOT collector
+on AWS is a stretch goal, not required.
 """
 
-from functools import lru_cache
-from typing import Any
-
 from opentelemetry import trace
+from opentelemetry.sdk.resources import SERVICE_NAME, Resource
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import ConsoleSpanExporter, SimpleSpanProcessor
 
 _configured = False
 
 
-def configure_tracing() -> None:
+def configure_tracing(service_name: str = "claim-adjudication-assist") -> None:
     global _configured
     if _configured:
         return
+    provider = TracerProvider(resource=Resource.create({SERVICE_NAME: service_name}))
+    provider.add_span_processor(SimpleSpanProcessor(ConsoleSpanExporter()))
+    trace.set_tracer_provider(provider)
     _configured = True
 
 
-@lru_cache(maxsize=None)
-def get_tracer(name: str) -> Any:
+def get_tracer(name: str) -> trace.Tracer:
     return trace.get_tracer(name)

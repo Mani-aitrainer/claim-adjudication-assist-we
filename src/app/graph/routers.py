@@ -29,3 +29,11 @@ def route_after_validate(state: ClaimState) -> str:
     if state.get("retry_count", 0) < max_attempts:
         return "repair"
     return "fallback"
+
+
+def route_after_audit(state: ClaimState) -> str:
+    """audit_node always clears `critique` to None except when it wants another heal
+    loop — see its docstring — so this check alone is enough to route correctly."""
+    if state.get("critique"):
+        return "heal"
+    return "done"
