@@ -18,6 +18,7 @@ from typing import Any
 import yaml
 
 from app.agents.base import BaseAgent
+from app.agents.offline_llm import parse_amount, parse_units
 from app.agents.prompts.intake_extraction import build_intake_messages
 from app.cache.base import CacheProvider
 from app.core.llm_factory import get_llm
@@ -80,4 +81,24 @@ class ClaimIntakeAgent(BaseAgent):
         llm = self._llm if self._llm is not None else get_llm("intake_agent")
         messages = build_intake_messages(parsed["key_values"], parsed["tables"], _load_field_map())
         response = llm.invoke(messages)
-        return json.loads(str(response.content))
+        fields = json.loads(str(response.content))
+        return _coerce_numeric_fields(fields)
+
+
+def _coerce_numeric_fields(fields: dict[str, Any]) -> dict[str, Any]:
+    """The LLM is asked for numeric JSON types but isn't guaranteed to return them (e.g.
+    amounts as "125.00" instead of 125.0) — coerce with the same naive rules the offline
+    stand-in uses, so downstream validation can rely on real numbers."""
+    if "claimed_amount" in fields and fields["claimed_amount"] is not None:
+        fields["claimed_amount"] = parse_amount(fields["claimed_amount"])
+    line_items = fields.get("line_items")
+    if line_items:
+        fields["line_items"] = [
+            {
+                **item,
+                "units": parse_units(item.get("units", "")),
+                "amount": parse_amount(item.get("amount", "")),
+            }
+            for item in line_items
+        ]
+    return fields

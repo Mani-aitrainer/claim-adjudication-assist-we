@@ -29,6 +29,8 @@ from app.core.settings import Settings, get_settings
 from app.graph.build_graph import build_graph
 from app.graph.build_graph import run_graph as _run_graph
 from app.ocr.fixture_provider import FixtureOCRProvider
+from app.rag.graph_store import get_graph_store
+from app.rag.vector_store import get_vector_store
 
 FIXTURE_CLAIMS_DIR = Path("tests/fixtures/claims")
 
@@ -68,6 +70,8 @@ class CLA:
             self._graph = build_graph(
                 checkpointer,
                 self._ocr_provider,
+                get_graph_store(self.settings),
+                get_vector_store(self.settings),
                 intake_llm=self._intake_llm(),
                 repair_llm=self._repair_llm(),
                 cache=self._cache,
