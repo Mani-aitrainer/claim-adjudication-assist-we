@@ -28,3 +28,16 @@ def test_readyz_returns_a_status_and_checks(tmp_path) -> None:
     assert "checks" in body
     assert set(body["checks"]) == {"cache", "secret"}
     assert body["checks"]["cache"] == "ok"
+
+
+def test_api_allows_browser_requests(tmp_path) -> None:
+    with TestClient(_test_app(tmp_path)) as client:
+        response = client.options(
+            "/v1/claims/adjudicate",
+            headers={
+                "Origin": "http://localhost:5500",
+                "Access-Control-Request-Method": "POST",
+            },
+        )
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == "*"
