@@ -127,35 +127,10 @@ def get_policy_period(policy_no: str) -> dict[str, str] | None:
     return _load_rules_config()["policy_periods"].get(policy_no)
 
 
-
-def route_after_validate(state: ClaimState) -> str:
-    validation = state.get("validation", {})
-    if validation.get("is_valid"):
-        return "done"
-
-    errors = validation.get("errors", [])
-    if not is_repairable(errors):
-        return "done"  # unrepairable (e.g. POLICY_WINDOW) -> straight through for a proper denial
-
-    model_extra = get_agent_config("repair_agent").model_extra or {}
-    max_attempts = model_extra.get("retry", {}).get("max_attempts", 2)
-    if state.get("retry_count", 0) < max_attempts:
-        return "repair"
-    return "fallback"
-
-
-def route_after_validate(state: ClaimState) -> str:
-    validation = state.get("validation", {})
-    if validation.get("is_valid"):
-        return "done"
-
-    errors = validation.get("errors", [])
-    if not is_repairable(errors):
-        return "done"  # unrepairable (e.g. POLICY_WINDOW) -> straight through for a proper denial
-
-    model_extra = get_agent_config("repair_agent").model_extra or {}
-    max_attempts = model_extra.get("retry", {}).get("max_attempts", 2)
-    if state.get("retry_count", 0) < max_attempts:
-        return "repair"
-    return "fallback"
-
+def is_repairable(errors: list[ValidationIssue]) -> bool:
+    """True when at least one failure looks like an extraction/OCR problem the
+    FieldRepairAgent can plausibly fix. Failures whose codes are all unrepairable
+    (e.g. POLICY_WINDOW - genuinely wrong data) go straight to adjudication for a
+    proper denial. Code lists live in domains/claims/validation_rules.yaml."""
+    repairable = set(_load_rules_config()["repairable_rule_codes"])
+    return any(error["code"] in repairable for error in errors)
