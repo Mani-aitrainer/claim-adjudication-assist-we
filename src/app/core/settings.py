@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     postgres_dsn: str = "postgresql://claims:claims@localhost:5432/claims"
     sqlite_path: str = "./.local/checkpoints.sqlite"
     redis_url: str | None = None
-    aws_region: str = "ap-south-1"
+    aws_region: str = "us-east-1"
     secret_name_openai: str = "claim-adjudication/openai-api-key"
     documents_dir: str = "./data/documents"
     fixture_dir: str = "./tests/fixtures/textract"

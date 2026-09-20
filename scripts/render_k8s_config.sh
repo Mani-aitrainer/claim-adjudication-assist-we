@@ -20,13 +20,19 @@ DOCUMENTS_BUCKET="$(jq_out documents_bucket)"
 OPENAI_SECRET_NAME="$(jq_out openai_secret_name)"
 AWS_REGION="$(jq_out aws_region)"
 APP_IRSA_ROLE_ARN="$(jq_out app_irsa_role_arn)"
+ALB_CONTROLLER_ROLE_ARN="$(jq_out alb_controller_role_arn)"
 
-# --- serviceaccount.rendered.yaml — substitute the IRSA role ARN placeholder --------
-# Written to a separate, gitignored file so the tracked serviceaccount.yaml stays a
-# reusable template (placeholder ARN) rather than being overwritten with one account's
-# real ARN on every render.
+# --- *.rendered.yaml — substitute the IRSA role ARN placeholders --------------------
+# Written to separate, gitignored files so the tracked templates keep their placeholder
+# ARNs rather than being overwritten with one account's real ARNs on every render.
 sed "s#__APP_IRSA_ROLE_ARN__#${APP_IRSA_ROLE_ARN}#" \
   "${REPO_ROOT}/k8s/serviceaccount.yaml" > "${REPO_ROOT}/k8s/serviceaccount.rendered.yaml"
+
+# The ALB controller's ServiceAccount must exist before `helm install ... --set
+# serviceAccount.create=false` runs, or the controller has no IAM identity.
+sed "s#__ALB_CONTROLLER_ROLE_ARN__#${ALB_CONTROLLER_ROLE_ARN}#" \
+  "${REPO_ROOT}/k8s/alb-controller-serviceaccount.yaml" \
+  > "${REPO_ROOT}/k8s/alb-controller-serviceaccount.rendered.yaml"
 
 # --- configmap.yaml — agents.yaml + tradeoff.yaml as files, plus non-secret env -----
 kubectl create configmap claim-adjudication-config \
@@ -47,4 +53,5 @@ kubectl create configmap claim-adjudication-config \
   --dry-run=client -o yaml \
   > "${REPO_ROOT}/k8s/configmap.yaml"
 
-echo "wrote k8s/configmap.yaml and k8s/serviceaccount.rendered.yaml from ${OUTPUTS_FILE}"
+echo "wrote k8s/configmap.yaml, k8s/serviceaccount.rendered.yaml and"
+echo "      k8s/alb-controller-serviceaccount.rendered.yaml from ${OUTPUTS_FILE}"

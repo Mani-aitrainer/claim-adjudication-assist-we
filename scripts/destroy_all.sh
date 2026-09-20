@@ -6,16 +6,35 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PROJECT="${PROJECT:-claim-adjudication}"
-AWS_REGION="${AWS_REGION:-ap-south-1}"
+AWS_REGION="${AWS_REGION:-us-east-1}"
 NAMESPACE="claim-adjudication"
 
+# The Kubernetes steps are skipped when there's no reachable cluster — which is the
+# normal case for a PARTIAL apply (EKS never finished, or the app was never deployed).
+# Without this guard `set -e` would kill the script here and `terraform destroy` would
+# never run, which is the opposite of what you want when tearing down a half-built stack.
+if kubectl cluster-info >/dev/null 2>&1; then
+  CLUSTER_REACHABLE=true
+else
+  CLUSTER_REACHABLE=false
+  echo "note: no reachable Kubernetes cluster — skipping steps 1 and 2 (nothing to drain)"
+fi
+
 echo "== 1/8: deleting the Ingress (releases the ALB, which Terraform does not own) =="
-kubectl delete ingress claim-adjudication -n "$NAMESPACE" --ignore-not-found --wait=true --timeout=180s
+if [ "$CLUSTER_REACHABLE" = true ]; then
+  kubectl delete ingress claim-adjudication -n "$NAMESPACE" --ignore-not-found --wait=true --timeout=180s
+else
+  echo "  skipped (no cluster)"
+fi
 
 echo "== 2/8: deleting any LoadBalancer-type Services =="
-kubectl get svc -n "$NAMESPACE" -o json \
-  | python3 -c "import json,sys; svcs=json.load(sys.stdin)['items']; print('\n'.join(s['metadata']['name'] for s in svcs if s['spec'].get('type')=='LoadBalancer'))" \
-  | xargs -r -n1 kubectl delete svc -n "$NAMESPACE" --wait=true --timeout=180s
+if [ "$CLUSTER_REACHABLE" = true ]; then
+  kubectl get svc -n "$NAMESPACE" -o json 2>/dev/null \
+    | python3 -c "import json,sys; svcs=json.load(sys.stdin)['items']; print('\n'.join(s['metadata']['name'] for s in svcs if s['spec'].get('type')=='LoadBalancer'))" \
+    | xargs -r -n1 kubectl delete svc -n "$NAMESPACE" --wait=true --timeout=180s
+else
+  echo "  skipped (no cluster)"
+fi
 
 echo "== 3/8: emptying the S3 documents bucket (including versions and delete markers) =="
 BUCKET="$(jq -r '.documents_bucket.value' "${REPO_ROOT}/.tf-outputs.json" 2>/dev/null || true)"
@@ -55,6 +74,10 @@ done
 
 echo "== 6/8: terraform destroy =="
 cd "${REPO_ROOT}/infra/terraform"
+# init is idempotent and required if .terraform/ was cleaned or this is a fresh clone —
+# without it destroy fails with "Backend initialization required".
+ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
+terraform init -reconfigure -backend-config="bucket=${PROJECT}-tfstate-${ACCOUNT_ID}-${AWS_REGION}"
 terraform destroy -auto-approve -var-file=envs/learning.tfvars
 
 echo "== 7/8: deleting leftover CloudWatch log groups =="
